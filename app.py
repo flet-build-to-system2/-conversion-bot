@@ -12,23 +12,37 @@ app = Flask(__name__)
 
 application = Application.builder().token(TOKEN).build()
 
+# تسجيل handlers
 application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 application.add_handler(CallbackQueryHandler(handle_buttons))
+
+
+# ⚠️ مهم: تشغيل البوت داخل event loop
+import asyncio
+asyncio.get_event_loop().run_until_complete(application.initialize())
+
 
 @app.route("/", methods=["GET"])
 def home():
     return "Bot is running!"
 
+
 @app.route("/webhook", methods=["POST"])
-def webhook():
-    update = Update.de_json(request.get_json(force=True), application.bot)
-    application.update_queue.put_nowait(update)
+async def webhook():
+    data = request.get_json(force=True)
+    update = Update.de_json(data, application.bot)
+    await application.process_update(update)
     return "ok"
 
-@app.before_first_request
-def setup():
-    application.bot.set_webhook(f"{WEBHOOK_URL}/webhook")
 
-if __name__ == "__main__":
-    app.run()
+# ❌ حذف before_first_request
+# ✅ بدله بهذا endpoint لتفعيل webhook يدوياً
+@app.route("/setwebhook", methods=["GET"])
+async def set_webhook():
+    await application.bot.set_webhook(f"{WEBHOOK_URL}/webhook")
+    return "Webhook set!"
+
+
+# ❗ مهم لـ Vercel
+handler = app
