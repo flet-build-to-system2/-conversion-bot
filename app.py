@@ -1,4 +1,5 @@
 import os
+import asyncio
 from flask import Flask, request
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
@@ -17,10 +18,9 @@ application.add_handler(CommandHandler("start", start))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 application.add_handler(CallbackQueryHandler(handle_buttons))
 
-
-# ⚠️ مهم: تشغيل البوت داخل event loop
-import asyncio
-asyncio.get_event_loop().run_until_complete(application.initialize())
+# تشغيل البوت
+loop = asyncio.get_event_loop()
+loop.run_until_complete(application.initialize())
 
 
 @app.route("/", methods=["GET"])
@@ -28,21 +28,24 @@ def home():
     return "Bot is running!"
 
 
+# ✅ webhook بدون async
 @app.route("/webhook", methods=["POST"])
-async def webhook():
+def webhook():
     data = request.get_json(force=True)
     update = Update.de_json(data, application.bot)
-    await application.process_update(update)
+
+    loop.run_until_complete(application.process_update(update))
     return "ok"
 
 
-# ❌ حذف before_first_request
-# ✅ بدله بهذا endpoint لتفعيل webhook يدوياً
+# ✅ endpoint لتفعيل webhook
 @app.route("/setwebhook", methods=["GET"])
-async def set_webhook():
-    await application.bot.set_webhook(f"{WEBHOOK_URL}/webhook")
+def set_webhook():
+    loop.run_until_complete(
+        application.bot.set_webhook(f"{WEBHOOK_URL}/webhook")
+    )
     return "Webhook set!"
 
 
-# ❗ مهم لـ Vercel
+# مهم لـ Vercel
 handler = app
